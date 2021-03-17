@@ -53,9 +53,9 @@ class BayesianOptimization:
         else:
             data = np.loadtxt(self.data_path, delimiter=",", dtype=float, encoding="utf-8", skiprows=0)
 
-        # 5 inputs(Temperature, Humidity, CO2, Illumination, Time) + 1 input(RGR at previous time step)
+        # 5 inputs(Temperature, Humidity, CO2, Illumination, Time)
         self.x = data[:, :5]
-        self.y = data[:, 5].reshape(-1, 1)  # 1 output(RGR at present time step)
+        self.y = data[:, 5].reshape(-1, 1)  # 1 output(growth rate)
         # scaling(using StandardScaler)
         self.x_scaler = StandardScaler()
         self.y_scaler = StandardScaler()

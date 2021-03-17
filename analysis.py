@@ -3,13 +3,29 @@
 import math
 import os
 
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
 import shap
 import xgboost as xgb
+from interpret import show
+from interpret.data import Marginal
+from interpret.glassbox import ExplainableBoostingRegressor, LinearRegression, RegressionTree
+from interpret.perf import RegressionPerf
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV
-from sklearn.preprocessing import StandardScaler
+
+# graph setting
+plt.rcParams['font.size'] = 16
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['Arial']
+plt.rcParams['xtick.direction'] = 'in'
+plt.rcParams['ytick.direction'] = 'in'
+plt.rcParams['xtick.major.width'] = 1.2
+plt.rcParams['ytick.major.width'] = 1.2
+plt.rcParams['axes.linewidth'] = 1.2
+plt.rcParams['grid.linestyle'] = '--'
+plt.rcParams['grid.linewidth'] = 0.3
 
 
 class DataAnalysis:
@@ -30,34 +46,32 @@ class DataAnalysis:
         self.save_path = save_path
 
         self.x = None
+        self.x_index = None
         self.y = None
-        self.x_std = None
-        self.y_std = None
-        self.y_t = None
-        self.x_scaler = None
-        self.y_scaler = None
         self.model = None
 
-    def preprocess(self, skiprows=True):
+    def preprocess(self, data_sum=False):
         """
         データの前処理(入力と出力を分割・正規化)を行う関数
         (任意)
         skiprows: 行のラベルが含まれている場合はTrue, そうでない場合はFalseを指定
         """
         # load data
-        if skiprows:
-            data = np.loadtxt(self.data_path, delimiter=",", dtype=float, encoding="utf-8", skiprows=1)
-        else:
-            data = np.loadtxt(self.data_path, delimiter=",", dtype=float, encoding="utf-8", skiprows=0)
+        data = pd.read_csv(self.data_path)
+        # 5 inputs(Temperature, Humidity, CO2, Illumination, Time)
+        self.x = data.iloc[:, :5]
+        self.x_index = self.x.columns.to_list()
+        self.y = data.iloc[:, [5]]  # 1 output(RGR at present time step)
 
-        # 5 inputs(Temperature, Humidity, CO2, Illumination, Time) + 1 input(RGR at previous time step)
-        self.x = data[:, :5]
-        self.y = data[:, 5].reshape(-1, 1)  # 1 output(RGR at present time step)
-        # scaling(using StandardScaler)
-        self.x_scaler = StandardScaler()
-        self.y_scaler = StandardScaler()
-        self.x_std = self.x_scaler.fit_transform(self.x)
-        self.y_std = self.y_scaler.fit_transform(self.y)
+        if data_sum:
+            column_names = self.x.columns.to_list()
+            add_name = [name + "_sum" for name in column_names]
+            x_sum = pd.DataFrame(np.zeros([len(data), len(self.x.columns)]), columns=add_name)
+            for row in range(1, len(data)+1):
+                x_extracted = self.x.iloc[:row].values
+                x_sum.iloc[row-1] = np.sum(x_extracted, axis=0)
+            self.x = pd.concat([self.x, x_sum], axis=1)
+            self.x_index += add_name
         print("***** Preprocess finished *****")
 
     @staticmethod
@@ -76,7 +90,7 @@ class DataAnalysis:
         param_grid = {"max_depth": [4, 6], "learning_rate": [0.01, 0.02, 0.05, 0.1]}
 
         # ハイパーパラメータ探索
-        model_cv = GridSearchCV(model, param_grid, cv=5, verbose=0)
+        model_cv = GridSearchCV(model, param_grid, cv=5, iid=True, verbose=0)
         model_cv.fit(self.x, self.y)
 
         # 改めて最適パラメータで学習
@@ -84,30 +98,51 @@ class DataAnalysis:
         self.model.fit(self.x, self.y)
         print("***** Modeling finished *****")
 
-    # FIXME: 現状勾配ブースティングはSHAPに対応していない
+    def ga2m(self):
+        # Explore the Data
+        marginal = Marginal().explain_data(self.x, self.y, name="Raw Data")
+
+        # Train the Explainable Boosting Machine(EBM)
+        lr = LinearRegression()
+        lr.fit(self.x, self.y)
+
+        rt = RegressionTree()
+        rt.fit(self.x, self.y)
+
+        ebm = ExplainableBoostingRegressor()  # For Classifier, use ebm = ExplainableBoostingClassifier()
+        ebm.fit(self.x, self.y)
+
+        # How Does the EBM Model Perform?
+        ebm_perf = RegressionPerf(ebm.predict).explain_perf(self.x, self.y, name="EBM")
+        lr_perf = RegressionPerf(lr.predict).explain_perf(self.x, self.y, name="Linear Regression")
+        rt_perf = RegressionPerf(rt.predict).explain_perf(self.x, self.y, name="Regression Tree")
+
+        # Global Interpretability - What the Model says for All Data
+        ebm_global = ebm.explain_global(name="EBM")
+        lr_global = lr.explain_global(name="LinearRegression")
+        rt_global = rt.explain_global(name="Regression Tree")
+
+        # Put All in a Dashboard - This is the best
+        show([marginal, lr_global, lr_perf, rt_global, rt_perf, ebm_perf, ebm_global])
+
     def shap_analysis(self, save_figure=False):
         shap.initjs()
         data = self.x
-        # Create Gradient explainer
-        explainer = shap.GradientExplainer(self.model, data)
+        # Create Tree explainer
+        explainer = shap.TreeExplainer(self.model, data)
         # Extract SHAP values to explain the model predictions
         shap_values = explainer.shap_values(data)
 
-        # Plot Feature Importance
-        fig = plt.figure(figsize=(10, 5))
-        ax1 = fig.add_subplot(1, 2, 1)
-        shap.summary_plot(shap_values, self.x, plot_type="bar", auto_size_plot=False, show=False, ax=ax1)
-        # Plot Feature Importance - 'Dot' type
-        ax2 = fig.add_subplot(1, 2, 2)
-        shap.summary_plot(shap_values, self.x, plot_type="dot", auto_size_plot=False, show=False, ax=ax2)
+        # Plot Feature Importance - 'violin' type
+        shap.summary_plot(shap_values, self.x, plot_type="violin", plot_size=(13, 5), show=False)
 
         if save_figure:
             plt.savefig(self.save_path + "summary_plot.png", dpi=100, bbox_inched="tight")
         plt.close()
 
     def plot_feature_importance(self, save_figure=False):
-        self.model.get_booster().feature_names = ["Temperature", "Humidity", "CO2", "Illumination", "Time"]
-        fig, ax = plt.subplots(figsize=(10, 5))
+        self.model.get_booster().feature_names = self.x_index
+        fig, ax = plt.subplots(figsize=(20, 5))
         xgb.plot_importance(self.model.get_booster(), ax=ax)
         if save_figure:
             plt.savefig(self.save_path + "feature_importance.png", dpi=100, bbox_inched="tight")
@@ -117,6 +152,7 @@ class DataAnalysis:
 if __name__ == "__main__":
     path = "data/SoranoSat_Recipe.csv"
     analyzer = DataAnalysis(data_path=path)
-    analyzer.preprocess()
+    analyzer.preprocess(data_sum=True)
     analyzer.gbdt()
+    analyzer.shap_analysis(save_figure=True)
     analyzer.plot_feature_importance(save_figure=True)
