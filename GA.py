@@ -135,7 +135,7 @@ class GA:
         np.savetxt(self.save_path + "optimal_NSGA2.csv", optimal, delimiter=",", header=header)
 
         df = pd.DataFrame(optimal, index=None, columns=columns)
-        # 最適解の保存
+        # コストが最小の最適解を保存
         if save_best_value:
             df["Cost"] = df["Illumination"] * df["Time"]
             df_sorted = df.sort_values("Cost", ascending=True)
