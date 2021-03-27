@@ -1,2 +1,8 @@
-Temperature,Humidity,CO2,Illumination,Time,Growth_rate
-30.58702351676271,48.664390499750034,1053.491514008179,162.66409321193146,10.221593239516274,1.3650394466373175
+,7
+Temperature,21.4
+Humidity,76.3
+CO2,1038.4
+Illumination,250.3
+Time,9.5
+Growth_rate,1.4
+Cost,2366.9

@@ -125,7 +125,7 @@ class GA:
                             verbose=verbose, seed=0)
         print("***** Genetic Algorithm Finished *****")
 
-    def plot_result(self):
+    def plot_result(self, save_best_value=False):
         columns = ["Temperature", "Humidity", "CO2", "Illumination", "Time", "Growth_rate"]
         header = ",".join(columns)
         # 最適解をcsvファイルに保存
@@ -134,23 +134,35 @@ class GA:
         optimal = np.hstack([res_x, res_f])
         np.savetxt(self.save_path + "optimal_NSGA2.csv", optimal, delimiter=",", header=header)
 
-        # 並行座標表示
         df = pd.DataFrame(optimal, index=None, columns=columns)
+        # 最適解の保存
+        if save_best_value:
+            df["Cost"] = df["Illumination"] * df["Time"]
+            df_sorted = df.sort_values("Cost", ascending=True)
+            df_sorted.iloc[0, :].to_csv(self.save_path + "opt_data.csv", encoding="utf-8",
+                                        float_format="%.1f", header=True)
+        # 並行座標表示
         fig = px.parallel_coordinates(df,
                                       dimensions=columns,
                                       color_continuous_scale=px.colors.diverging.Tealrose,
                                       height=400, width=800)
-        fig.write_html(self.save_path + 'parallel_coordinates_px.html', auto_open=True)
+        fig.write_html(self.save_path + 'parallel_coordinates_px.html', auto_open=False)
         plt.close()
 
 
 # define your problem
 class MyProblem(Problem):
-    def __init__(self, model):
+    def __init__(self, model, data_path):
         self.model = model
+        self.data_path = data_path
+        # load data
+        data = np.loadtxt(self.data_path, delimiter=",", dtype=float, skiprows=1)
+        # 5 inputs at the last time step(Temperature, Humidity, CO2, Illumination, Time)
+        self.cond = data[-1, :5]
+        print(self.cond)
         super().__init__(n_var=5,
                          n_obj=1,
-                         n_constr=0,
+                         n_constr=3,
                          xl=np.array([20.0, 45.0, 400.0, 100.0, 8.0]),
                          xu=np.array([35.0, 80.0, 1200.0, 255.0, 23.0]),
                          elementwise_evaluation=True)
@@ -162,12 +174,13 @@ class MyProblem(Problem):
 
         # TODO: 制約条件についてディスカッションしたい(Timeに関しては制約つけられるよね！)
         # set constraints
-        # g1 = 2 * (x[0] - 0.1) * (x[0] - 0.9) / 0.18
-        # g2 = - 20 * (x[0] - 0.4) * (x[0] - 0.6) / 4.8
+        g1 = np.abs(x[0] - self.cond[0]) - 5
+        g2 = np.abs(x[1] - self.cond[1]) - 10
+        g3 = np.abs(x[2] - self.cond[2]) - 200
 
         # F is objective function, G is constraint
         out["F"] = [f1]
-        # out["G"] = [g1, g2]
+        out["G"] = [g1, g2, g3]
 
 
 if __name__ == "__main__":
@@ -179,8 +192,8 @@ if __name__ == "__main__":
     clf = analyzer.gbdt(return_model=True)
 
     # genetic algorithm part
-    prob = MyProblem(clf)
+    prob = MyProblem(clf, data_path=_data_path)
     ga = GA(problem=prob, pop_size=100, n_offsprings=100, n_gen=100, save_path=_save_path)
     ga.set_algorithm()
     ga.execute(verbose=True)
-    ga.plot_result()
+    ga.plot_result(save_best_value=True)
