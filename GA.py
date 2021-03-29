@@ -172,9 +172,8 @@ class MyProblem(Problem):
         growth_rate = predict_growth(x, self.model)
         f1 = growth_rate * (-1)  # 最大化問題に変換するための処理
 
-        # TODO: 制約条件についてディスカッションしたい(Timeに関しては制約つけられるよね！)
         # set constraints
-        g1 = np.abs(x[0] - self.cond[0]) - 5
+        g1 = np.abs(x[0] - self.cond[0]) - 2.5
         g2 = np.abs(x[1] - self.cond[1]) - 10
         g3 = np.abs(x[2] - self.cond[2]) - 200
 
