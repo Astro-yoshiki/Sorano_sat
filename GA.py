@@ -27,9 +27,9 @@ plt.rcParams['grid.linestyle'] = '--'
 plt.rcParams['grid.linewidth'] = 0.3
 
 
-class DataAnalysis:
+class Regressor:
     """
-    データ解析を行うクラス. 流れは, データの前処理 → ガウス過程回帰 → SHAP解析 → 結果の保存 となっている
+    モデリングを行うクラス. 流れは, データの前処理 → 勾配ブースティング となっている
     (必須)
     data_path: データファイルを指定
     (必須)
@@ -139,8 +139,8 @@ class GA:
         if save_best_value:
             df["Cost"] = df["Illumination"] * df["Time"]
             df_sorted = df.sort_values("Cost", ascending=True)
-            df_sorted.iloc[0, :].to_csv(self.save_path + "opt_data.csv", encoding="utf-8",
-                                        float_format="%.1f", header=True)
+            df_sorted.iloc[:3, :].to_csv(self.save_path + "opt_data.csv", encoding="utf-8",
+                                         float_format="%.1f", index=None, header=True)
         # 並行座標表示
         fig = px.parallel_coordinates(df,
                                       dimensions=columns,
@@ -159,7 +159,7 @@ class MyProblem(Problem):
         data = np.loadtxt(self.data_path, delimiter=",", dtype=float, skiprows=1)
         # 5 inputs at the last time step(Temperature, Humidity, CO2, Illumination, Time)
         self.cond = data[-1, :5]
-        print(self.cond)
+
         super().__init__(n_var=5,
                          n_obj=1,
                          n_constr=3,
@@ -186,9 +186,9 @@ if __name__ == "__main__":
     _data_path = "data/SoranoSat_Recipe.csv"
     _save_path = "result/"
     # modeling part
-    analyzer = DataAnalysis(data_path=_data_path)
-    analyzer.preprocess()
-    clf = analyzer.gbdt(return_model=True)
+    regressor = Regressor(data_path=_data_path)
+    regressor.preprocess()
+    clf = regressor.gbdt(return_model=True)
 
     # genetic algorithm part
     prob = MyProblem(clf, data_path=_data_path)

@@ -119,8 +119,6 @@ class BayesianOptimization:
         ]
         # run optimization
         print("***** Optimization start *****")
-        # TODO: オリジナルの獲得関数の設定方法について調査(探索範囲を制限するため, 端っこの獲得関数値を0にしてしまう？)
-        # TODO: 端っこを取らないような工夫を加える
         self.res = gp_minimize(self.objective_function, spaces, acq_func="gp_hedge", acq_optimizer="sampling",
                                n_points=50000, n_calls=self.n_calls, model_queue_size=1, n_jobs=-1, verbose=False)
 
@@ -163,6 +161,16 @@ class BayesianOptimization:
             opt_str = ','.join(opt_list)
             f.write(opt_str + "\n")
 
+        # add results to a master data
+        with open(self.data_path, "a") as f:
+            buf_list = []
+            for x in self.res.x:
+                buf_list.append(x)
+            buf_list.append(self.res.fun * (-1))
+            opt_list = list(map(str, buf_list))
+            opt_str = ','.join(opt_list)
+            f.write(opt_str + "\n")
+
         # save history to a csv file
         history_x = self.res.x_iters[0:self.n_calls]
         if self.flag_maximize:
@@ -187,8 +195,8 @@ if __name__ == "__main__":
     BO.preprocess()
     kernel = C(1.0, (1e-2, 1e2)) * RBF(1.0, (1e-2, 1e2)) + Wh(0.01, (1e-2, 1e2))
     BO.gaussian_process(kernel_=kernel)
-    BO.plot_prediction()
+    # BO.plot_prediction()
     BO.run_optimization()
-    BO.plot_optimization_result()
+    # BO.plot_optimization_result()
     BO.show_result()
     BO.save_result()
