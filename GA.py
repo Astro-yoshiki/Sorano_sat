@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
+import datetime
 import math
 import os
 
@@ -25,6 +26,15 @@ plt.rcParams['ytick.major.width'] = 1.2
 plt.rcParams['axes.linewidth'] = 1.2
 plt.rcParams['grid.linestyle'] = '--'
 plt.rcParams['grid.linewidth'] = 0.3
+
+
+class DateTimeFlag:
+    """Class to get the current time"""
+    def __init__(self):
+        self.now = datetime.datetime.now()
+
+    def get_flag(self):
+        return "{0:%Y%m%d}".format(self.now)
 
 
 class Regressor:
@@ -99,10 +109,13 @@ class GA:
         self.n_offsprings = n_offsprings
         self.n_gen = n_gen
         if save_path is None:
-            save_path = "result/"
+            save_path = "result/GA/"
             if not os.path.exists(save_path):
                 os.mkdir(save_path)
         self.save_path = save_path
+
+        date = DateTimeFlag()
+        self.date = date.get_flag()
 
         self.algorithm = None
         self.termination = None
@@ -119,34 +132,36 @@ class GA:
         )
         self.termination = get_termination("n_gen", self.n_gen)
 
-    def execute(self, verbose=True):
+    def run(self, verbose=True):
         print("***** Genetic Algorithm Start *****")
         self.res = minimize(self.problem, self.algorithm, self.termination, pf=None, save_history=True,
                             verbose=verbose, seed=0)
         print("***** Genetic Algorithm Finished *****")
 
-    def plot_result(self, save_best_value=False):
+    def plot_result(self, save_history=False, save_best_value=False):
         columns = ["Temperature", "Humidity", "CO2", "Illumination", "Time", "Growth_rate"]
         header = ",".join(columns)
         # 最適解をcsvファイルに保存
         res_x = np.array(self.res.X)
         res_f = np.array(self.res.F) * (-1)  # 元の値に戻す
         optimal = np.hstack([res_x, res_f])
-        np.savetxt(self.save_path + "optimal_NSGA2.csv", optimal, delimiter=",", header=header)
+        if save_history:
+            np.savetxt(self.save_path + "SoranoSat_History_{0}.csv".format(self.date), optimal,
+                       delimiter=",", header=header)
 
         df = pd.DataFrame(optimal, index=None, columns=columns)
         # コストが最小の最適解を保存
         if save_best_value:
             df["Cost"] = df["Illumination"] * df["Time"]
             df_sorted = df.sort_values("Cost", ascending=True)
-            df_sorted.iloc[:3, :].to_csv(self.save_path + "opt_data.csv", encoding="utf-8",
-                                         float_format="%.1f", index=None, header=True)
+            df_sorted.iloc[:3, :].to_csv(self.save_path + "SoranoSat_OptData_{0}.csv".format(self.date),
+                                         encoding="utf-8", float_format="%.1f", index=None, header=True)
         # 並行座標表示
         fig = px.parallel_coordinates(df,
                                       dimensions=columns,
                                       color_continuous_scale=px.colors.diverging.Tealrose,
                                       height=400, width=800)
-        fig.write_html(self.save_path + 'parallel_coordinates_px.html', auto_open=False)
+        fig.write_html(self.save_path + "parallel_coordinates_px_{0}.html".format(self.date), auto_open=False)
         plt.close()
 
 
@@ -173,6 +188,7 @@ class MyProblem(Problem):
         f1 = growth_rate * (-1)  # 最大化問題に変換するための処理
 
         # set constraints
+        # TODO: 成長条件の制約については要検討
         g1 = np.abs(x[0] - self.cond[0]) - 2.5
         g2 = np.abs(x[1] - self.cond[1]) - 10
         g3 = np.abs(x[2] - self.cond[2]) - 200
@@ -183,8 +199,7 @@ class MyProblem(Problem):
 
 
 if __name__ == "__main__":
-    _data_path = "data/SoranoSat_Recipe.csv"
-    _save_path = "result/"
+    _data_path = "data/SoranoSat_Data.csv"
     # modeling part
     regressor = Regressor(data_path=_data_path)
     regressor.preprocess()
@@ -192,7 +207,7 @@ if __name__ == "__main__":
 
     # genetic algorithm part
     prob = MyProblem(clf, data_path=_data_path)
-    ga = GA(problem=prob, pop_size=100, n_offsprings=100, n_gen=100, save_path=_save_path)
+    ga = GA(problem=prob, pop_size=100, n_offsprings=100, n_gen=100)
     ga.set_algorithm()
-    ga.execute(verbose=True)
-    ga.plot_result(save_best_value=True)
+    ga.run(verbose=True)
+    ga.plot_result(save_history=True, save_best_value=True)

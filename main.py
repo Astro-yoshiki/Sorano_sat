@@ -1,14 +1,33 @@
 #!/usr/bin/env python
 # coding: utf-8
+import datetime
 import os
+import shutil
 
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel as C, RBF, WhiteKernel as Wh
 from sklearn.preprocessing import StandardScaler
 from skopt import gp_minimize
 from skopt.plots import plot_convergence
-import matplotlib.pyplot as plt
+
+
+def cut_table(data_path, line_to_cut_off=None):
+    """Function to arrange table(delete the last three lines)"""
+    df = pd.read_csv(data_path)
+    df_original = df.iloc[:line_to_cut_off*(-1), :]
+    df_original.to_csv(data_path, index=False)
+
+
+class DateTimeFlag:
+    """Class to get the current time"""
+    def __init__(self):
+        self.now = datetime.datetime.now()
+
+    def get_flag(self):
+        return "{0:%Y%m%d}".format(self.now)
 
 
 class BayesianOptimization:
@@ -21,15 +40,19 @@ class BayesianOptimization:
     flag_maximize: Trueであれば最大化, Falseであれば最小化
     n_calls: 最適化を何回繰り返すか(デフォルトは100回)
     """
-    def __init__(self, data_path=None, save_path=None, flag_maximize=True, n_calls=100):
+    def __init__(self, data_path=None, save_path=None, flag_maximize=True, n_calls=100, idx=None):
         self.data_path = data_path
         if save_path is None:
-            save_path = "result/"
+            save_path = "result/BO/"
             if not os.path.exists(save_path):
                 os.mkdir(save_path)
         self.save_path = save_path
         self.flag_maximize = flag_maximize
         self.n_calls = n_calls
+        self.idx = idx + 1
+
+        date = DateTimeFlag()
+        self.date = date.get_flag()
 
         self.x = None
         self.y = None
@@ -61,8 +84,8 @@ class BayesianOptimization:
         self.y_scaler = StandardScaler()
         self.x_std = self.x_scaler.fit_transform(self.x)
         self.y_std = self.y_scaler.fit_transform(self.y)
-        print("***** Preprocess finished *****")
-    
+        print("***** Preprocess finished ({0}) *****".format(str(self.idx)))
+
     def gaussian_process(self, kernel_=None):
         """
         ガウス過程回帰を行う関数
@@ -71,7 +94,7 @@ class BayesianOptimization:
         """
         self.model = GaussianProcessRegressor(kernel=kernel_, n_restarts_optimizer=30)
         self.model.fit(self.x_std, self.y_std)
-        print("***** Gaussian Process finished *****")
+        print("***** Gaussian Process finished ({0}) *****".format(str(self.idx)))
 
     def plot_prediction(self):
         y_pred_std = self.model.predict(self.x_std)
@@ -118,7 +141,7 @@ class BayesianOptimization:
             (8.0, 23.0, "uniform"),  # Time
         ]
         # run optimization
-        print("***** Optimization start *****")
+        print("***** Optimization start ({0}) *****".format(str(self.idx)))
         self.res = gp_minimize(self.objective_function, spaces, acq_func="gp_hedge", acq_optimizer="sampling",
                                n_points=50000, n_calls=self.n_calls, model_queue_size=1, n_jobs=-1, verbose=False)
 
@@ -141,17 +164,18 @@ class BayesianOptimization:
         print("Best value is {}".format(opt_fx))
         print("Best input is {}".format(opt_x))
         
-    def save_result(self):
+    def save_result(self, save_history=False):
         """
         最適解と最適化過程を保存する関数. ファイル形式は.csvとしている
-        1. opt_data.csv: 最適解
-        2. history_data.csv: 最適化過程
+        1. SoranoSat_recipe_ラズパイ番号_日付.csv: 各ラズパイに送る最適解
+        2. SoranoSat_OptData_日付.csv：最適化された条件を含む教師データ
+        3. SoranoSat_History_日付.csv: 最適化過程(任意)
         """
         # save results to a csv file
         columns_name_list = ["Temperature", "Humidity", "CO2", "Illumination", "Time"]  # column name
         columns_name_list_str = ",".join(columns_name_list)  # put a comma between elements to a string
         columns_name_list_str = columns_name_list_str + ",Growth_rate" + "\n"  # insert target name and line feed code
-        with open(self.save_path + "opt_data.csv", "w") as f:
+        with open(self.save_path + "SoranoSat_recipe_{0}_{1}.csv".format(str(self.idx), self.date), "w") as f:
             f.write(columns_name_list_str)
             buf_list = []
             for x in self.res.x:
@@ -161,42 +185,44 @@ class BayesianOptimization:
             opt_str = ','.join(opt_list)
             f.write(opt_str + "\n")
 
-        # add results to a master data
+        # copy master data to save directory and add results
         with open(self.data_path, "a") as f:
             buf_list = []
             for x in self.res.x:
                 buf_list.append(x)
             buf_list.append(self.res.fun * (-1))
             opt_list = list(map(str, buf_list))
-            opt_str = ','.join(opt_list)
+            opt_str = ",".join(opt_list)
             f.write(opt_str + "\n")
+        shutil.copy(self.data_path, self.save_path + "SoranoSat_OptData_{0}.csv".format(self.date))
 
         # save history to a csv file
-        history_x = self.res.x_iters[0:self.n_calls]
-        if self.flag_maximize:
-            history_y = self.res.func_vals[0:self.n_calls] * (-1)
-        else:
-            history_y = self.res.func_vals[0:self.n_calls]
-        history_y_list = history_y.tolist()
-        history_x_list = history_x
-        with open(self.save_path + "history_data.csv", "w") as f:
-            f.write(columns_name_list_str)
-            for X, Y in zip(history_x_list, history_y_list):
-                X.append(Y)
-                buf_list = list(map(str, X))
-                buf_str = ','.join(buf_list)
-                f.write(buf_str + '\n')
-        print("***** Optimization finished *****")
+        if save_history:
+            history_x = self.res.x_iters[0:self.n_calls]
+            if self.flag_maximize:
+                history_y = self.res.func_vals[0:self.n_calls] * (-1)
+            else:
+                history_y = self.res.func_vals[0:self.n_calls]
+            history_y_list = history_y.tolist()
+            history_x_list = history_x
+            with open(self.save_path + "SoranoSat_History_{0}.csv".format(self.date), "w") as f:
+                f.write(columns_name_list_str)
+                for X, Y in zip(history_x_list, history_y_list):
+                    X.append(Y)
+                    buf_list = list(map(str, X))
+                    buf_str = ','.join(buf_list)
+                    f.write(buf_str + '\n')
+        print("***** Optimization finished ({0}) *****".format(str(self.idx)))
 
 
 if __name__ == "__main__":
-    path = "data/SoranoSat_Recipe.csv"
-    BO = BayesianOptimization(data_path=path)
-    BO.preprocess()
-    kernel = C(1.0, (1e-2, 1e2)) * RBF(1.0, (1e-2, 1e2)) + Wh(0.01, (1e-2, 1e2))
-    BO.gaussian_process(kernel_=kernel)
-    # BO.plot_prediction()
-    BO.run_optimization()
-    # BO.plot_optimization_result()
-    BO.show_result()
-    BO.save_result()
+    _data_path = "data/SoranoSat_Data.csv"
+    iteration = 3
+    for i in range(iteration):
+        BO = BayesianOptimization(data_path=_data_path, n_calls=10, idx=i)
+        BO.preprocess()
+        kernel = C(1.0, (1e-2, 1e2)) * RBF(1.0, (1e-2, 1e2)) + Wh(0.01, (1e-2, 1e2))
+        BO.gaussian_process(kernel_=kernel)
+        BO.run_optimization()
+        BO.save_result(save_history=False)
+    cut_table(data_path=_data_path, line_to_cut_off=iteration)

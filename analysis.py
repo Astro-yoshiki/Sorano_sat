@@ -150,7 +150,7 @@ class DataAnalysis:
 
 
 if __name__ == "__main__":
-    path = "data/SoranoSat_Recipe.csv"
+    path = "data/SoranoSat_Data.csv"
     analyzer = DataAnalysis(data_path=path)
     analyzer.preprocess(data_sum=True)
     analyzer.gbdt()
