@@ -7,6 +7,7 @@ import shutil
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from joblib import dump
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel as C, RBF, WhiteKernel as Wh
 from sklearn.preprocessing import StandardScaler
@@ -86,14 +87,16 @@ class BayesianOptimization:
         self.y_std = self.y_scaler.fit_transform(self.y)
         print("***** Preprocess finished ({0}) *****".format(str(self.idx)))
 
-    def gaussian_process(self, kernel_=None):
+    def gaussian_process(self, kernel=None, save_model=False):
         """
         ガウス過程回帰を行う関数
         (必須)
         kernel_: ガウス過程におけるカーネルを設定する
         """
-        self.model = GaussianProcessRegressor(kernel=kernel_, n_restarts_optimizer=30)
+        self.model = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=30)
         self.model.fit(self.x_std, self.y_std)
+        if save_model:
+            dump(self.model, self.save_path + "gp.pkl")
         print("***** Gaussian Process finished ({0}) *****".format(str(self.idx)))
 
     def plot_prediction(self):
@@ -221,8 +224,8 @@ if __name__ == "__main__":
     for i in range(iteration):
         BO = BayesianOptimization(data_path=_data_path, n_calls=10, idx=i)
         BO.preprocess()
-        kernel = C(1.0, (1e-2, 1e2)) * RBF(1.0, (1e-2, 1e2)) + Wh(0.01, (1e-2, 1e2))
-        BO.gaussian_process(kernel_=kernel)
+        _kernel = C(1.0, (1e-2, 1e2)) * RBF(1.0, (1e-2, 1e2)) + Wh(0.01, (1e-2, 1e2))
+        BO.gaussian_process(kernel=_kernel)
         BO.run_optimization()
         BO.save_result(save_history=False)
     cut_table(data_path=_data_path, line_to_cut_off=iteration)
