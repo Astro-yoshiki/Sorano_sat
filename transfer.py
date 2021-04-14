@@ -45,6 +45,22 @@ class TransferLearning(BayesianOptimization):
         self.y_std = self.y_scaler.fit_transform(self.y)
         print("***** Preprocess finished ({0}) *****".format(str(self.idx)))
 
+    # TODO: モデル出力の和を予測結果とするように変更
+    def objective_function(self, x):
+        """
+        目的関数(最適化の際に最大化 or 最小化をする関数)を与える
+        ここでは, RGRの最大化を目的関数として設定している
+        (注意：skoptは最小化問題しか扱えないため, 最大化問題は-1を掛けることで最小化問題に変換している)
+        """
+        x = np.array(x).reshape(1, -1)
+        x_std = self.x_scaler.transform(x)
+        y_std = self.model.predict(x_std)
+        y = self.y_scaler.inverse_transform(y_std)[0][0]
+        if self.flag_maximize:
+            return y * (-1)
+        else:
+            return y
+
 
 if __name__ == "__main__":
     # TODO: ノイズを加えたデータを作成
@@ -55,6 +71,7 @@ if __name__ == "__main__":
     # 転移学習の実行
     TL = TransferLearning(base_path=_base_path, target_path=_target_path, model_path=_model_path)
     _data = TL.calculate_difference(skiprows=1)
+    TL.load_model()
     TL.preprocess(data=_data)
     _kernel = C(1.0, (1e-2, 1e2)) * RBF(1.0, (1e-2, 1e2)) + Wh(0.01, (1e-2, 1e2))
     TL.gaussian_process(kernel=_kernel, save_model=False)
