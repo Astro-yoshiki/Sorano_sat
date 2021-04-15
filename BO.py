@@ -31,6 +31,7 @@ class DateTimeFlag:
         return "{0:%Y%m%d}".format(self.now)
 
 
+# TODO: GPyが使用できるなら, そっちで作成したい
 class BayesianOptimization:
     """
     ベイズ最適化を行うクラス. 流れは, データの前処理 → ガウス過程回帰 → 最適化 → 結果の表示 → 結果の保存 となっている
@@ -222,10 +223,10 @@ if __name__ == "__main__":
     _data_path = "data/SoranoSat_Data.csv"
     iteration = 3
     for i in range(iteration):
-        BO = BayesianOptimization(data_path=_data_path, n_calls=10, idx=i)
+        BO = BayesianOptimization(data_path=_data_path, n_calls=100, idx=i)
         BO.preprocess()
         _kernel = C(1.0, (1e-2, 1e2)) * RBF(1.0, (1e-2, 1e2)) + Wh(0.01, (1e-2, 1e2))
-        BO.gaussian_process(kernel=_kernel)
+        BO.gaussian_process(kernel=_kernel, save_model=True)
         BO.run_optimization()
         BO.save_result(save_history=False)
     cut_table(data_path=_data_path, line_to_cut_off=iteration)
