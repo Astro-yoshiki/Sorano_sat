@@ -86,6 +86,9 @@ class BayesianOptimization:
         self.y_scaler = StandardScaler()
         self.x_std = self.x_scaler.fit_transform(self.x)
         self.y_std = self.y_scaler.fit_transform(self.y)
+        # スケーラーの保存
+        dump(self.x_scaler, self.save_path + "x_scaler.joblib")
+        dump(self.y_scaler, self.save_path + "y_scaler.joblib")
         print("***** Preprocess finished ({0}) *****".format(str(self.idx)))
 
     def gaussian_process(self, kernel=None, save_model=False):
@@ -223,7 +226,7 @@ if __name__ == "__main__":
     _data_path = "data/SoranoSat_Data.csv"
     iteration = 3
     for i in range(iteration):
-        BO = BayesianOptimization(data_path=_data_path, n_calls=100, idx=i)
+        BO = BayesianOptimization(data_path=_data_path, n_calls=10, idx=i)
         BO.preprocess()
         _kernel = C(1.0, (1e-2, 1e2)) * RBF(1.0, (1e-2, 1e2)) + Wh(0.01, (1e-2, 1e2))
         BO.gaussian_process(kernel=_kernel, save_model=True)
