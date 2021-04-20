@@ -8,12 +8,12 @@ from sklearn.gaussian_process.kernels import ConstantKernel as C, RBF, WhiteKern
 from sklearn.preprocessing import StandardScaler
 from skopt import gp_minimize
 
-from BO import BayesianOptimization, cut_table
+from BO_skopt import BayesianOptimization, cut_table
 
 
 class TransferLearning(BayesianOptimization):
     def __init__(self, base_path, target_path, model_path, x_scaler_path, y_scaler_path, save_path=None):
-        super().__init__(save_path, n_calls=10, idx=0)
+        super().__init__(save_path, n_calls=100, idx=0)
         self.data_path = base_path
         self.base_path = base_path
         self.target_path = target_path
@@ -58,7 +58,7 @@ class TransferLearning(BayesianOptimization):
         self.y = data[:, 5].reshape(-1, 1)  # 1 output(Growth rate)
         # scaling(using StandardScaler)
         self.y_scaler = StandardScaler()
-        self.x_std = self.x_scaler_base.fit_transform(self.x)
+        self.x_std = self.x_scaler_base.transform(self.x)
         self.y_std = self.y_scaler.fit_transform(self.y)
         print("***** Preprocess finished ({0}) *****".format(str(self.idx)))
 
