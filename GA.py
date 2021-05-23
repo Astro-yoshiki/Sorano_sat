@@ -179,8 +179,8 @@ class MyProblem(Problem):
         super().__init__(n_var=6,
                          n_obj=1,
                          n_constr=0,
-                         xl=np.array([20.0, 45.0, 400.0, 100.0, 8.0, 1]),
-                         xu=np.array([35.0, 80.0, 1200.0, 255.0, 23.0, 3]),
+                         xl=np.array([20.0, 45.0, 400.0, 100.0, 8.0, 1.0]),
+                         xu=np.array([35.0, 80.0, 1200.0, 255.0, 23.0, 3.0]),
                          elementwise_evaluation=True)
 
     def _evaluate(self, x, out, *args, **kwargs):
