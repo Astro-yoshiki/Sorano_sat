@@ -60,9 +60,9 @@ class Regressor:
         """
         # load data
         data = np.loadtxt(self.data_path, delimiter=",", dtype=float, skiprows=1)
-        # 5 inputs(Temperature, Humidity, CO2, Illumination, Time)
-        self.x = data[:, :5]
-        self.y = data[:, 5].reshape(-1, 1)  # 1 output(RGR at present time step)
+        # 5 inputs(Temperature, Humidity, CO2, Illumination, Time, Soil)
+        self.x = data[:, :6]
+        self.y = data[:, -1].reshape(-1, 1)  # 1 output(Growth Rate)
         print("***** Preprocess finished *****")
 
     @staticmethod
@@ -78,7 +78,7 @@ class Regressor:
         """
         model = xgb.XGBRegressor(objective="reg:squarederror", n_estimators=1000)
         # グリッドサーチの設定
-        param_grid = {"max_depth": [4, 6], "learning_rate": [0.01, 0.02, 0.05, 0.1]}
+        param_grid = {"max_depth": [4, 6, 8], "learning_rate": [0.01, 0.02, 0.05, 0.1]}
 
         # ハイパーパラメータ探索
         model_cv = GridSearchCV(model, param_grid, cv=5, iid=True, verbose=0)
@@ -139,10 +139,11 @@ class GA:
         print("***** Genetic Algorithm Finished *****")
 
     def plot_result(self, save_history=False, save_best_value=False):
-        columns = ["Temperature", "Humidity", "CO2", "Illumination", "Time", "Growth_rate"]
+        columns = ["Temperature", "Humidity", "CO2", "Illumination", "Time", "Soil", "Growth_rate"]
         header = ",".join(columns)
         # 最適解をcsvファイルに保存
         res_x = np.array(self.res.X)
+        res_x[:, 5] = np.round(res_x[:, 5], decimals=0)  # "Soil"をfloat→int型へ変換(四捨五入)
         res_f = np.array(self.res.F) * (-1)  # 元の値に戻す
         optimal = np.hstack([res_x, res_f])
         if save_history:
@@ -172,30 +173,31 @@ class MyProblem(Problem):
         self.data_path = data_path
         # load data
         data = np.loadtxt(self.data_path, delimiter=",", dtype=float, skiprows=1)
-        # 5 inputs at the last time step(Temperature, Humidity, CO2, Illumination, Time)
+        # 5 inputs at the last time step(Temperature, Humidity, CO2, Illumination, Time, Soil)
         self.cond = data[-1, :5]
 
-        super().__init__(n_var=5,
+        super().__init__(n_var=6,
                          n_obj=1,
-                         n_constr=3,
-                         xl=np.array([20.0, 45.0, 400.0, 100.0, 8.0]),
-                         xu=np.array([35.0, 80.0, 1200.0, 255.0, 23.0]),
+                         n_constr=0,
+                         xl=np.array([20.0, 45.0, 400.0, 100.0, 8.0, 1]),
+                         xu=np.array([35.0, 80.0, 1200.0, 255.0, 23.0, 3]),
                          elementwise_evaluation=True)
 
     def _evaluate(self, x, out, *args, **kwargs):
-        # set objective functions
+        # set objective function
+        x[5] = np.round(x[5], decimals=0)
         growth_rate = predict_growth(x, self.model)
         f1 = growth_rate * (-1)  # 最大化問題に変換するための処理
 
         # set constraints
         # TODO: 成長条件の制約については要検討
-        g1 = np.abs(x[0] - self.cond[0]) - 2.5
-        g2 = np.abs(x[1] - self.cond[1]) - 10
-        g3 = np.abs(x[2] - self.cond[2]) - 200
+        # g1 = np.abs(x[0] - self.cond[0]) - 2.5
+        # g2 = np.abs(x[1] - self.cond[1]) - 10
+        # g3 = np.abs(x[2] - self.cond[2]) - 200
 
         # F is objective function, G is constraint
         out["F"] = [f1]
-        out["G"] = [g1, g2, g3]
+        # out["G"] = [g1, g2, g3]
 
 
 if __name__ == "__main__":
