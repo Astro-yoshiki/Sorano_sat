@@ -152,7 +152,7 @@ class DataAnalysis:
 if __name__ == "__main__":
     path = "data/SoranoSat_Data.csv"
     analyzer = DataAnalysis(data_path=path)
-    analyzer.preprocess(data_sum=True)
+    analyzer.preprocess(data_sum=False)
     analyzer.gbdt()
     analyzer.shap_analysis(save_figure=True)
     analyzer.plot_feature_importance(save_figure=True)
