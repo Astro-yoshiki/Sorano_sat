@@ -117,18 +117,29 @@ class BayesianOptimization:
             dump(self.model, self.save_path + "gp.pkl")
         print("***** Gaussian Process finished ({0}) *****".format(str(self.idx)))
 
-    def plot_prediction(self):
-        y_pred_std = self.model.predict(self.x_std)
-        y_pred = self.y_scaler.inverse_transform(y_pred_std)
-        r2 = r2_score(self.y, y_pred)
+    def plot_prediction(self, idx=None):
+        y_pred_mu_std, y_pred_sigma_std = self.model.predict(self.x_std, return_std=True)
+        y_pred_mu = self.y_scaler.inverse_transform(y_pred_mu_std)
+        y_pred_sigma = y_pred_sigma_std * self.y_scaler.scale_
+        r2 = r2_score(self.y, y_pred_mu)
 
-        fig, ax = plt.subplots(figsize=(5, 5))
-        ax.plot(self.y, y_pred, "ro")
-        ax.plot([min(self.y), max(self.y)], [min(self.y), max(self.y)], color="black", linestyle="dashed")
-        ax.text(0.95, 0.1, "R2 score : {0:.2f}".format(r2), va="top", ha="right", transform=ax.transAxes)
-        ax.set_xlabel("Actual")
-        ax.set_ylabel("Prediction")
-        ax.set_title("Prediction by GPR")
+        # fig, ax = plt.subplots(figsize=(5, 5))
+        # ax.plot(self.y, y_pred_mu, "ro")
+        # ax.plot([min(self.y), max(self.y)], [min(self.y), max(self.y)], color="black", linestyle="dashed")
+        # ax.text(0.95, 0.1, "R2 score : {0:.2f}".format(r2), va="top", ha="right", transform=ax.transAxes)
+        # ax.set_xlabel("Actual")
+        # ax.set_ylabel("Prediction")
+        # ax.set_title("Prediction by GPR")
+
+        num_opt = np.arange(1, 62+idx, 1)
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(num_opt, self.y, "r", marker="s", label="Measured value")
+        ax.errorbar(num_opt, y_pred_mu, yerr=y_pred_sigma, fmt="o", label="Expected value")
+        # ax.fill_between(num_opt, y_pred_mu.reshape(-1) - y_pred_sigma, y_pred_mu.reshape(-1) + y_pred_sigma,
+                        # alpha=0.3, color="steelblue", label="1σ")
+        ax.set_xlabel("Number of Optimizations")
+        ax.set_ylabel("Growth Rate")
+        ax.legend(loc="best")
 
         # show plots
         fig.tight_layout()
@@ -246,7 +257,7 @@ if __name__ == "__main__":
         BO.preprocess()
         _kernel = C(1.0, (1e-2, 1e2)) * RBF(1.0, (1e-2, 1e2)) + Wh(0.01, (1e-2, 1e2))
         BO.gaussian_process(kernel=_kernel, save_model=True)
-        BO.plot_prediction()
+        BO.plot_prediction(idx=i)
         BO.run_optimization()
         BO.save_result(save_history=False)
     cut_table(data_path=_data_path, line_to_cut_off=iteration)
